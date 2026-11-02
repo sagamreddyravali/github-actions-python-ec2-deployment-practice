@@ -1,0 +1,78 @@
+name: Deploy Python App - Bastion Host
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy Through Bastion Host
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.10.5
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Get EC2 IP Addresses
+        id: ec2
+        run: |
+          BASTION_IP=$(terraform output -raw bastion_public_ip)
+          PRIVATE_IP=$(terraform output -raw bastion_private_app_private_ip)
+
+          echo "bastion_ip=$BASTION_IP" >> "$GITHUB_OUTPUT"
+          echo "private_ip=$PRIVATE_IP" >> "$GITHUB_OUTPUT"
+
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/ec2-key.pem
+          chmod 600 ~/.ssh/ec2-key.pem
+
+          cat >> ~/.ssh/config <<EOF
+          Host bastion
+            HostName ${{ steps.ec2.outputs.bastion_ip }}
+            User ubuntu
+            IdentityFile ~/.ssh/ec2-key.pem
+            StrictHostKeyChecking accept-new
+
+          Host private-app
+            HostName ${{ steps.ec2.outputs.private_ip }}
+            User ubuntu
+            IdentityFile ~/.ssh/ec2-key.pem
+            ProxyJump bastion
+            StrictHostKeyChecking accept-new
+          EOF
+
+      - name: Copy Application Files
+        run: |
+          scp -r app scripts private-app:/tmp/
+
+      - name: Deploy Application
+        run: |
+          ssh private-app \
+            "sudo mkdir -p /tmp/python-app-deploy && \
+             sudo mv /tmp/app /tmp/scripts /tmp/python-app-deploy/ && \
+             sudo chown -R ubuntu:ubuntu /tmp/python-app-deploy && \
+             bash /tmp/python-app-deploy/scripts/deploy.sh"
+
+      - name: Verify Application
+        run: |
+          ssh private-app \
+            "curl --fail http://localhost:5000/health"

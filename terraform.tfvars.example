@@ -1,0 +1,28 @@
+# AWS Configuration
+aws_region = "us-east-1"
+
+# Project Configuration
+project_name = "python-github-actions"
+environment  = "lab"
+
+# Deployment Scenario: public, ssm, or bastion
+deployment_type = "public"
+
+# Network Configuration
+vpc_cidr            = "10.20.0.0/16"
+public_subnet_cidr  = "10.20.1.0/24"
+private_subnet_cidr = "10.20.2.0/24"
+availability_zone   = "us-east-1a"
+
+# EC2 Configuration
+ami_id         = "REPLACE_WITH_UBUNTU_24_04_AMI_ID"
+instance_type  = "t3.micro"
+key_pair_name  = "REPLACE_WITH_YOUR_EC2_KEY_PAIR_NAME"
+root_volume_size = 8
+
+# Security Configuration
+ssh_ingress_cidr = "REPLACE_WITH_YOUR_PUBLIC_IP/32"
+app_ingress_cidr = "0.0.0.0/0"
+
+# NAT Gateway Configuration
+enable_nat_gateway = false

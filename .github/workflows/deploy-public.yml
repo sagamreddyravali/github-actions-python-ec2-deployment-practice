@@ -1,0 +1,60 @@
+name: Deploy Python App - Public EC2
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy Application Through SSH
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.10.5
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Get Public EC2 IP
+        id: ec2
+        run: |
+          EC2_HOST=$(terraform output -raw public_instance_ip)
+          echo "host=$EC2_HOST" >> "$GITHUB_OUTPUT"
+
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/ec2-key.pem
+          chmod 600 ~/.ssh/ec2-key.pem
+          ssh-keyscan -H "${{ steps.ec2.outputs.host }}" >> ~/.ssh/known_hosts
+
+      - name: Copy Application Files
+        run: |
+          scp -i ~/.ssh/ec2-key.pem -r app scripts \
+            ubuntu@${{ steps.ec2.outputs.host }}:/tmp/python-app-deploy
+
+      - name: Deploy Application
+        run: |
+          ssh -i ~/.ssh/ec2-key.pem \
+            ubuntu@${{ steps.ec2.outputs.host }} \
+            "bash /tmp/python-app-deploy/scripts/deploy.sh"
+
+      - name: Verify Application
+        run: |
+          curl --fail --retry 5 --retry-delay 5 \
+            "http://${{ steps.ec2.outputs.host }}:5000/health"

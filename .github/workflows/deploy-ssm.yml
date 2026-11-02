@@ -1,0 +1,80 @@
+name: Deploy Python App - AWS SSM
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy Through AWS Systems Manager
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.10.5
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Get SSM Instance ID
+        id: ec2
+        run: |
+          INSTANCE_ID=$(terraform output -raw ssm_instance_id)
+          echo "instance_id=$INSTANCE_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Package Application
+        run: |
+          tar -czf python-app.tar.gz app scripts
+
+      - name: Upload Application to S3
+        run: |
+          aws s3 cp python-app.tar.gz \
+            "s3://aws-python-app-github-actions-deployments/artifacts/${GITHUB_SHA}.tar.gz"
+
+      - name: Deploy Through SSM
+        run: |
+          cat > commands.json <<EOF
+          {
+            "commands": [
+              "aws s3 cp s3://aws-python-app-github-actions-deployments/artifacts/${GITHUB_SHA}.tar.gz /tmp/python-app.tar.gz",
+              "mkdir -p /tmp/python-app-deploy",
+              "tar -xzf /tmp/python-app.tar.gz -C /tmp/python-app-deploy",
+              "chown -R ubuntu:ubuntu /tmp/python-app-deploy",
+              "bash /tmp/python-app-deploy/scripts/deploy.sh"
+            ]
+          }
+          EOF
+
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "${{ steps.ec2.outputs.instance_id }}" \
+            --document-name "AWS-RunShellScript" \
+            --parameters file://commands.json \
+            --query "Command.CommandId" \
+            --output text)
+
+          echo "SSM Command ID: $COMMAND_ID"
+
+          aws ssm wait command-executed \
+            --command-id "$COMMAND_ID" \
+            --instance-id "${{ steps.ec2.outputs.instance_id }}"
+
+      - name: Verify Application
+        run: |
+          aws ssm send-command \
+            --instance-ids "${{ steps.ec2.outputs.instance_id }}" \
+            --document-name "AWS-RunShellScript" \
+            --parameters '{"commands":["curl --fail http://localhost:5000/health"]}'
