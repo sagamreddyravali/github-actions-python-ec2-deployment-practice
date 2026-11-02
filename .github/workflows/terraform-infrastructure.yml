@@ -37,7 +37,7 @@ on:
         description: "Enable NAT Gateway for private subnet internet access"
         required: true
         type: boolean
-        default: false
+        default: true
 
 permissions:
   id-token: write

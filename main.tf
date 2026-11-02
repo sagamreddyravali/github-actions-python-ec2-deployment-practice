@@ -286,6 +286,31 @@ resource "aws_iam_role_policy_attachment" "ssm_policy" {
 }
 
 # ==========================================
+# S3 DOWNLOAD PERMISSION FOR PRIVATE EC2
+# ==========================================
+
+resource "aws_iam_role_policy" "ssm_s3_download" {
+  name = "${var.project_name}-s3-download-policy"
+  role = aws_iam_role.ssm_ec2_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+
+    Statement = [
+      {
+        Effect = "Allow"
+
+        Action = [
+          "s3:GetObject"
+        ]
+
+        Resource = "arn:aws:s3:::aws-python-app-github-actions-deployments/artifacts/*"
+      }
+    ]
+  })
+}
+
+# ==========================================
 # IAM INSTANCE PROFILE
 # ==========================================
 
@@ -360,7 +385,7 @@ resource "aws_instance" "ssm_app" {
     set -eux
 
     apt-get update -y
-    apt-get install -y python3 python3-venv python3-pip git
+    apt-get install -y python3 python3-venv python3-pip git awscli
 
     mkdir -p /opt/python-app
     chown ubuntu:ubuntu /opt/python-app
@@ -380,7 +405,8 @@ resource "aws_instance" "ssm_app" {
 
   depends_on = [
     aws_route_table_association.private,
-    aws_iam_role_policy_attachment.ssm_policy
+    aws_iam_role_policy_attachment.ssm_policy,
+    aws_iam_role_policy.ssm_s3_download
   ]
 }
 
@@ -458,4 +484,3 @@ resource "aws_instance" "bastion_private_app" {
     aws_route_table_association.private
   ]
 }
-

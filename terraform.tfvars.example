@@ -25,4 +25,4 @@ ssh_ingress_cidr = "REPLACE_WITH_YOUR_PUBLIC_IP/32"
 app_ingress_cidr = "0.0.0.0/0"
 
 # NAT Gateway Configuration
-enable_nat_gateway = false
+enable_nat_gateway = true
