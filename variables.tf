@@ -66,8 +66,14 @@ variable "instance_type" {
 }
 
 variable "key_pair_name" {
-  description = "Existing EC2 key pair name"
+  description = "Existing EC2 key pair name (not required for SSM deployment)"
   type        = string
+  default     = ""
+
+  validation {
+    condition     = var.deployment_type == "ssm" || trimspace(var.key_pair_name) != ""
+    error_message = "An existing EC2 key pair name is required for public and bastion deployments."
+  }
 }
 
 variable "root_volume_size" {

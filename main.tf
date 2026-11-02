@@ -374,7 +374,7 @@ resource "aws_instance" "ssm_app" {
   instance_type          = var.instance_type
   subnet_id              = aws_subnet.private.id
   vpc_security_group_ids = [aws_security_group.private_app_sg.id]
-  key_name               = var.key_pair_name
+  key_name               = null # No key pair needed for SSM deployment
 
   associate_public_ip_address = false
 
