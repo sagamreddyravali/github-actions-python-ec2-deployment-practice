@@ -2,6 +2,42 @@ name: Terraform Infrastructure Deployment
 
 on:
   workflow_dispatch:
+    inputs:
+      deployment_type:
+        description: "Select deployment scenario"
+        required: true
+        type: choice
+        options:
+          - public
+          - ssm
+          - bastion
+
+      ami_id:
+        description: "Ubuntu 24.04 AMI ID in us-east-1"
+        required: true
+        type: string
+
+      key_pair_name:
+        description: "Existing AWS EC2 key pair name"
+        required: true
+        type: string
+
+      ssh_ingress_cidr:
+        description: "Your public IP CIDR, for example 1.2.3.4/32"
+        required: true
+        type: string
+
+      app_ingress_cidr:
+        description: "Allowed application access CIDR"
+        required: true
+        type: string
+        default: "0.0.0.0/0"
+
+      enable_nat_gateway:
+        description: "Enable NAT Gateway for private subnet internet access"
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   id-token: write
@@ -11,6 +47,14 @@ jobs:
   terraform:
     name: Provision AWS Infrastructure
     runs-on: ubuntu-latest
+
+    env:
+      TF_VAR_deployment_type: ${{ inputs.deployment_type }}
+      TF_VAR_ami_id: ${{ inputs.ami_id }}
+      TF_VAR_key_pair_name: ${{ inputs.key_pair_name }}
+      TF_VAR_ssh_ingress_cidr: ${{ inputs.ssh_ingress_cidr }}
+      TF_VAR_app_ingress_cidr: ${{ inputs.app_ingress_cidr }}
+      TF_VAR_enable_nat_gateway: ${{ inputs.enable_nat_gateway }}
 
     steps:
       - name: Checkout Repository
